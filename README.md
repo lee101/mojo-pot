@@ -34,15 +34,17 @@ unbalanced transport, barycenters, sliced or Gromov-Wasserstein solvers, GPU
 execution, and POT's autodifferentiation support. Unsupported options raise
 instead of being ignored. Kernel inputs are converted to contiguous float64;
 complex values, floats wider than float64, and integers outside float64's
-exact range are rejected rather than silently narrowed. Classic Sinkhorn uses
-size-gated CPU parallelism for matrices with at least 1,048,576 entries;
-smaller problems stay serial to avoid thread-launch overhead.
+exact range are rejected rather than silently narrowed. Classic Sinkhorn and
+pairwise distance evaluation use size-gated CPU parallelism for matrices with
+at least 1,048,576 entries; smaller problems stay serial to avoid thread-launch
+overhead.
 
 No GPU path is provided because the benchmark targets are not suitable for
-one: classic Sinkhorn's repeated matrix-vector passes have well under two
-floating-point operations per byte moved, while exact EMD is dominated by
-branchy residual-graph traversal. Moving either workload to a GPU would add
-transfer and launch overhead without enough arithmetic intensity to offset it.
+one: classic Sinkhorn's repeated matrix-vector passes and pairwise distance
+evaluation have well under two floating-point operations per byte moved,
+while exact EMD is dominated by branchy residual-graph traversal. Moving these
+workloads to a GPU would add transfer and launch overhead without enough
+arithmetic intensity to offset it.
 
 ## Install
 
@@ -86,18 +88,18 @@ subset keep POT's parameter names, defaults, logs, and namespace layout.
 
 ## Benchmarks
 
-Measured on 2026-07-30 with an Intel Xeon E5-2697 v4 at 2.30 GHz
+Measured on 2026-08-26 with an Intel Xeon E5-2697 v4 at 2.30 GHz
 (Linux x86_64). These are best-of-three wall-clock times from `pixi run bench`
 on identical float64 inputs:
 
 | case | mojo-pot | POT | speedup | result |
 |---|---:|---:|---:|---|
-| wasserstein_1d (200k x 180k) | 60.76 ms | 103.76 ms | 1.71x | faster |
-| emd (64 x 64) | 11.46 ms | 1.24 ms | 0.11x | slower |
-| sinkhorn (256 x 256) | 1.69 ms | 2.15 ms | 1.27x | faster |
-| sinkhorn_log (128 x 128) | 21.90 ms | 53.80 ms | 2.46x | faster |
-| greenkhorn (256 x 256) | 5.99 ms | 57.61 ms | 9.61x | faster |
-| dist sqeuclidean (2k x 2k x 10) | 39.27 ms | 125.73 ms | 3.20x | faster |
+| wasserstein_1d (200k x 180k) | 59.10 ms | 94.44 ms | 1.60x | faster |
+| emd (64 x 64) | 3.81 ms | 0.55 ms | 0.14x | slower |
+| sinkhorn (256 x 256) | 1.30 ms | 1.77 ms | 1.36x | faster |
+| sinkhorn_log (128 x 128) | 14.81 ms | 39.30 ms | 2.65x | faster |
+| greenkhorn (256 x 256) | 5.66 ms | 55.52 ms | 9.81x | faster |
+| dist sqeuclidean (2k x 2k x 10) | 6.85 ms | 58.53 ms | 8.55x | faster |
 
 POT's mature native network simplex still wins decisively on exact EMD. The
 SIMD and cache-contiguous classic Sinkhorn kernel now beats POT for this
@@ -116,13 +118,15 @@ cross `ctypes` as integer addresses and are reconstructed as mutable
 or ownership crosses the FFI boundary.
 
 The exact solver treats the dense cost matrix as an implicit bipartite
-residual network. A primal-dual shortest-path traversal uses reduced costs and
-node potentials, avoiding repeated Bellman-Ford sweeps while retaining reverse
-arcs from the current plan. Each augmentation preserves feasibility and
+residual network. A primal-dual shortest-path traversal uses reduced costs,
+node potentials, and a bounded decrease-key heap while retaining reverse arcs
+from the current plan. Each augmentation preserves feasibility and
 reaches the linear-program optimum. The regularized solvers operate directly
 on dense row-major costs. Classic Sinkhorn uses SIMD dot products, scalar tail
 loops, and a transposed kernel scratch buffer so both row and column passes are
 contiguous; genuinely large matrices use independent row-level parallel work.
+Pairwise distance evaluation likewise uses SIMD feature reductions with a
+scalar tail and size-gated parallel rows.
 Log Sinkhorn uses stable log-sum-exp reductions, and Greenkhorn updates one
 maximally violating marginal while maintaining row and column sums
 incrementally. The one-dimensional solver sorts the supports in Python and
@@ -136,5 +140,5 @@ pixi run test
 pixi run bench
 ```
 
-The test task currently runs 31 numerical and behavioral parity cases against
+The test task currently runs 33 numerical and behavioral parity cases against
 the real POT package.

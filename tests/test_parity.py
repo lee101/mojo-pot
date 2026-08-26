@@ -47,6 +47,14 @@ def test_emd_known_transport_plan():
     assert mot.emd2(a, b, M) == pytest.approx(0.1)
 
 
+def test_emd_heap_path_on_dense_problem():
+    a, b, M = problem(24, 27, seed=62)
+    ours = mot.emd(a, b, M)
+    theirs = ot.emd(a, b, M)
+    assert_marginals(ours, a, b)
+    assert np.sum(ours * M) == pytest.approx(np.sum(theirs * M), abs=2e-12)
+
+
 def test_emd_empty_histograms_mean_uniform():
     M = np.array([[0.0, 1.0], [1.0, 0.0]])
     assert np.array_equal(mot.emd([], [], M), ot.emd([], [], M))
@@ -210,6 +218,14 @@ def test_dist_x2_defaults_to_x1():
     ours = mot.dist(x)
     assert np.allclose(ours, ot.dist(x))
     assert np.array_equal(np.diag(ours), np.zeros(10))
+
+
+def test_dist_parallel_threshold_with_simd_tail():
+    n = 1024
+    x = np.zeros((n, 3))
+    y = np.ones((n, 3))
+    result = mot.dist(x, y)
+    assert np.array_equal(result, np.full((n, n), 3.0))
 
 
 def test_input_validation_and_uncovered_options():

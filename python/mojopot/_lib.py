@@ -17,10 +17,10 @@ I = ctypes.c_int64
 F = ctypes.c_double
 
 _SIGNATURES = {
-    "mpot_emd": ([I] * 13 + [F], I),
+    "mpot_emd": ([I] * 14 + [F], I),
     "mpot_sinkhorn": ([I] * 10 + [F, I, F, I, I], I),
     "mpot_greenkhorn": ([I] * 11 + [F, I, F], I),
-    "mpot_dist": ([I] * 6, None),
+    "mpot_dist": ([I] * 7, None),
     "mpot_emd_1d": ([I] * 9 + [F], I),
     "mpot_wasserstein_1d": ([I] * 6 + [F], F),
 }

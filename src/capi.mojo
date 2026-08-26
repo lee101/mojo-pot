@@ -34,6 +34,7 @@ def mpot_emd(
     predecessor_addr: Int,
     potential_addr: Int,
     visited_addr: Int,
+    heap_addr: Int,
     n: Int,
     m: Int,
     max_iter: Int,
@@ -49,6 +50,7 @@ def mpot_emd(
     var predecessor = ip(predecessor_addr)
     var potential = p(potential_addr)
     var visited = ip(visited_addr)
+    var heap = ip(heap_addr)
     var nodes = n + m
     comptime W = simdwidthof[DType.float64]()
 
@@ -101,30 +103,53 @@ def mpot_emd(
         if remaining <= tol:
             return iteration
 
+        var heap_size = 0
         for node in range(nodes):
             distance[node] = HUGE
             predecessor[node] = -2
-            visited[node] = 0
+            visited[node] = -1
         for i in range(n):
             if supply[i] > tol:
                 distance[i] = 0.0
                 predecessor[i] = -1
+                heap[heap_size] = Int64(i)
+                visited[i] = Int64(heap_size)
+                heap_size += 1
 
         var end_j = -1
         var best_sink_distance = HUGE
-        for _ in range(nodes):
-            var current = -1
-            var current_distance = HUGE
-            for candidate_node in range(nodes):
-                if (
-                    visited[candidate_node] == 0
-                    and distance[candidate_node] < current_distance
-                ):
-                    current_distance = distance[candidate_node]
-                    current = candidate_node
-            if current < 0 or current_distance >= best_sink_distance:
+        while heap_size > 0:
+            var current = Int(heap[0])
+            var current_distance = distance[current]
+            heap_size -= 1
+            visited[current] = -2
+            if heap_size > 0:
+                var replacement = Int(heap[heap_size])
+                heap[0] = Int64(replacement)
+                visited[replacement] = 0
+                var heap_index = 0
+                while True:
+                    var left = 2 * heap_index + 1
+                    if left >= heap_size:
+                        break
+                    var right = left + 1
+                    var child = left
+                    if (
+                        right < heap_size
+                        and distance[Int(heap[right])]
+                        < distance[Int(heap[left])]
+                    ):
+                        child = right
+                    if distance[replacement] <= distance[Int(heap[child])]:
+                        break
+                    var child_node = Int(heap[child])
+                    heap[heap_index] = Int64(child_node)
+                    visited[child_node] = Int64(heap_index)
+                    heap_index = child
+                heap[heap_index] = Int64(replacement)
+                visited[replacement] = Int64(heap_index)
+            if current_distance >= best_sink_distance:
                 break
-            visited[current] = 1
 
             if current >= n:
                 var current_j = current - n
@@ -144,9 +169,28 @@ def mpot_emd(
                             - potential[source_i]
                         )
                         var candidate = current_distance + reduced
-                        if candidate < distance[source_i] - 1.0e-15:
+                        if (
+                            visited[source_i] != -2
+                            and candidate < distance[source_i] - 1.0e-15
+                        ):
                             distance[source_i] = candidate
                             predecessor[source_i] = Int64(current)
+                            var position = Int(visited[source_i])
+                            if position == -1:
+                                position = heap_size
+                                heap[heap_size] = Int64(source_i)
+                                visited[source_i] = Int64(position)
+                                heap_size += 1
+                            while position > 0:
+                                var parent = (position - 1) // 2
+                                var parent_node = Int(heap[parent])
+                                if distance[parent_node] <= candidate:
+                                    break
+                                heap[position] = Int64(parent_node)
+                                visited[parent_node] = Int64(position)
+                                position = parent
+                            heap[position] = Int64(source_i)
+                            visited[source_i] = Int64(position)
             else:
                 var target_j = 0
                 var target_vector_end = m - m % W
@@ -163,13 +207,29 @@ def mpot_emd(
                     var previous_distances = distance.load[width=W](target_node)
                     comptime for lane in range(W):
                         if (
-                            candidates[lane]
+                            visited[target_node + lane] != -2
+                            and candidates[lane]
                             < previous_distances[lane] - 1.0e-15
                         ):
-                            predecessor[target_node + lane] = Int64(current)
-                    distance.store(
-                        target_node, min(previous_distances, candidates)
-                    )
+                            var updated_node = target_node + lane
+                            distance[updated_node] = candidates[lane]
+                            predecessor[updated_node] = Int64(current)
+                            var position = Int(visited[updated_node])
+                            if position == -1:
+                                position = heap_size
+                                heap[heap_size] = Int64(updated_node)
+                                visited[updated_node] = Int64(position)
+                                heap_size += 1
+                            while position > 0:
+                                var parent = (position - 1) // 2
+                                var parent_node = Int(heap[parent])
+                                if distance[parent_node] <= candidates[lane]:
+                                    break
+                                heap[position] = Int64(parent_node)
+                                visited[parent_node] = Int64(position)
+                                position = parent
+                            heap[position] = Int64(updated_node)
+                            visited[updated_node] = Int64(position)
                     target_j += W
                 while target_j < m:
                     var target_node = n + target_j
@@ -181,9 +241,28 @@ def mpot_emd(
                         - potential[target_node]
                     )
                     var candidate = current_distance + reduced
-                    if candidate < distance[target_node] - 1.0e-15:
+                    if (
+                        visited[target_node] != -2
+                        and candidate < distance[target_node] - 1.0e-15
+                    ):
                         distance[target_node] = candidate
                         predecessor[target_node] = Int64(current)
+                        var position = Int(visited[target_node])
+                        if position == -1:
+                            position = heap_size
+                            heap[heap_size] = Int64(target_node)
+                            visited[target_node] = Int64(position)
+                            heap_size += 1
+                        while position > 0:
+                            var parent = (position - 1) // 2
+                            var parent_node = Int(heap[parent])
+                            if distance[parent_node] <= candidate:
+                                break
+                            heap[position] = Int64(parent_node)
+                            visited[parent_node] = Int64(position)
+                            position = parent
+                        heap[position] = Int64(target_node)
+                        visited[target_node] = Int64(position)
                     target_j += 1
 
         if end_j < 0 or best_sink_distance == HUGE:
@@ -572,17 +651,38 @@ def mpot_dist(
     n: Int,
     m: Int,
     d: Int,
+    parallel_enabled: Int,
 ) abi("C"):
     var x = p(x_addr)
     var y = p(y_addr)
     var result = p(result_addr)
-    for i in range(n):
+    comptime W = simdwidthof[DType.float64]()
+
+    @parameter
+    def compute_row(i: Int):
         for j in range(m):
-            var total = 0.0
-            for k in range(d):
+            var totals = SIMD[DType.float64, W](0.0)
+            var k = 0
+            var vector_end = d - d % W
+            while k < vector_end:
+                var differences = (
+                    x.load[width=W](i * d + k)
+                    - y.load[width=W](j * d + k)
+                )
+                totals += differences * differences
+                k += W
+            var total = totals.reduce_add()
+            while k < d:
                 var difference = x[i * d + k] - y[j * d + k]
                 total += difference * difference
+                k += 1
             result[i * m + j] = total
+
+    if parallel_enabled != 0 and n * m >= PARALLEL_MATRIX_THRESHOLD:
+        parallelize[compute_row](n)
+    else:
+        for i in range(n):
+            compute_row(i)
 
 
 @export("mpot_emd_1d")

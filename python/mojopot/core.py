@@ -130,6 +130,7 @@ def emd(
     predecessor = np.empty(n + m, dtype=np.int64)
     potential = np.empty(n + m)
     visited = np.empty(n + m, dtype=np.int64)
+    heap = np.empty(n + m, dtype=np.int64)
     status = lib().mpot_emd(
         addr(source),
         addr(target),
@@ -141,6 +142,7 @@ def emd(
         addr(predecessor),
         addr(potential),
         addr(visited),
+        addr(heap),
         n,
         m,
         int(numItermax),
@@ -480,6 +482,7 @@ def dist(
         x.shape[0],
         y.shape[0],
         x.shape[1],
+        int(parallel_ready()),
     )
     result[result < 0] = 0
     if metric == "sqeuclidean":
