@@ -1,6 +1,6 @@
 """C ABI kernels for balanced discrete optimal transport."""
 
-from std.algorithm import parallelize
+from max.algorithm import parallelize
 from std.math import exp, log, sqrt
 from std.sys.info import simd_width_of as simdwidthof
 
