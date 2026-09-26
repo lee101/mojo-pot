@@ -6,7 +6,7 @@ import warnings
 
 import numpy as np
 
-from ._lib import addr, f64, lib, parallel_ready
+from ._lib import addr, f64, lib
 
 
 def _problem(a, b, M):
@@ -254,7 +254,6 @@ def _sinkhorn_run(
             int(numItermax),
             float(stopThr),
             0,
-            int(parallel_ready()),
         )
         log_domain = False
     elif normalized in {"sinkhorn_log", "log"}:
@@ -273,7 +272,6 @@ def _sinkhorn_run(
             int(numItermax),
             float(stopThr),
             1,
-            0,
         )
         log_domain = True
     elif normalized == "greenkhorn":
@@ -482,7 +480,6 @@ def dist(
         x.shape[0],
         y.shape[0],
         x.shape[1],
-        int(parallel_ready()),
     )
     result[result < 0] = 0
     if metric == "sqeuclidean":

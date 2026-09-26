@@ -18,9 +18,9 @@ F = ctypes.c_double
 
 _SIGNATURES = {
     "mpot_emd": ([I] * 14 + [F], I),
-    "mpot_sinkhorn": ([I] * 10 + [F, I, F, I, I], I),
+    "mpot_sinkhorn": ([I] * 10 + [F, I, F, I], I),
     "mpot_greenkhorn": ([I] * 11 + [F, I, F], I),
-    "mpot_dist": ([I] * 7, None),
+    "mpot_dist": ([I] * 6, None),
     "mpot_emd_1d": ([I] * 9 + [F], I),
     "mpot_wasserstein_1d": ([I] * 6 + [F], F),
 }
@@ -70,36 +70,18 @@ def build(force: bool = False) -> str:
         raise BuildError((result.stderr or result.stdout).strip()[:4000])
     return LIBRARY
 
-
 _library = None
-_parallel_device = None
-_parallel_ready = False
 
 
 def lib() -> ctypes.CDLL:
-    global _library, _parallel_device, _parallel_ready
+    global _library
     if _library is None:
         _library = ctypes.CDLL(build())
         for name, (argtypes, restype) in _SIGNATURES.items():
             function = getattr(_library, name)
             function.argtypes = argtypes
             function.restype = restype
-        try:
-            initialize = getattr(
-                _library, "KGEN_CompilerRT_AsyncRT_GetOrCreateCPUDevice"
-            )
-            initialize.argtypes = []
-            initialize.restype = ctypes.c_void_p
-            _parallel_device = initialize()
-            _parallel_ready = bool(_parallel_device)
-        except (AttributeError, OSError):
-            _parallel_ready = False
     return _library
-
-
-def parallel_ready() -> bool:
-    lib()
-    return _parallel_ready
 
 
 def f64(value, *, copy: bool = False) -> np.ndarray:

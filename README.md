@@ -35,9 +35,10 @@ execution, and POT's autodifferentiation support. Unsupported options raise
 instead of being ignored. Kernel inputs are converted to contiguous float64;
 complex values, floats wider than float64, and integers outside float64's
 exact range are rejected rather than silently narrowed. Classic Sinkhorn and
-pairwise distance evaluation use size-gated CPU parallelism for matrices with
-at least 1,048,576 entries; smaller problems stay serial to avoid thread-launch
-overhead.
+pairwise distance evaluation run as a single serial pass: every one of their
+inner loops is a bandwidth-bound reduction over the dense cost matrix, well
+under two floating-point operations per byte moved, so a worker pool would add
+launch overhead without adding arithmetic intensity.
 
 No GPU path is provided because the benchmark targets are not suitable for
 one: classic Sinkhorn's repeated matrix-vector passes and pairwise distance
@@ -124,9 +125,8 @@ from the current plan. Each augmentation preserves feasibility and
 reaches the linear-program optimum. The regularized solvers operate directly
 on dense row-major costs. Classic Sinkhorn uses SIMD dot products, scalar tail
 loops, and a transposed kernel scratch buffer so both row and column passes are
-contiguous; genuinely large matrices use independent row-level parallel work.
-Pairwise distance evaluation likewise uses SIMD feature reductions with a
-scalar tail and size-gated parallel rows.
+contiguous. Pairwise distance evaluation likewise uses SIMD feature reductions
+with a scalar tail.
 Log Sinkhorn uses stable log-sum-exp reductions, and Greenkhorn updates one
 maximally violating marginal while maintaining row and column sums
 incrementally. The one-dimensional solver sorts the supports in Python and
